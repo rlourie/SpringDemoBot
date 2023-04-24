@@ -1,11 +1,11 @@
 CREATE TABLE bot.users (
-	id int4 NOT NULL,
+	id int8 NOT NULL,
 	name varchar(255) NULL,
 	"number" varchar(255) NULL,
 	CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 CREATE TABLE bot.users_status (
-	id int4 NOT NULL,
+	id int8 NOT NULL,
 	command varchar(255) NULL,
 	status varchar(255) NULL,
 	user_id int4 NULL,

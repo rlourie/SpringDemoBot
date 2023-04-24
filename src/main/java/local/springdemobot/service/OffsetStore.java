@@ -1,4 +1,4 @@
-package local.springdemobot.model;
+package local.springdemobot.service;
 
 import lombok.Getter;
 import lombok.Setter;

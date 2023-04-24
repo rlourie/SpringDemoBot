@@ -1,9 +1,7 @@
 package local.springdemobot.service;
 
-import local.springdemobot.model.OffsetStore;
 import local.springdemobot.model.UpdateDto;
 import local.springdemobot.model.UpdatesDto;
-import lombok.AllArgsConstructor;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -45,4 +43,6 @@ public class TelegramClient {
         return response != null ? response.getResult() : null;
     }
 
+    public void getNumber(Long userId) {
+    }
 }

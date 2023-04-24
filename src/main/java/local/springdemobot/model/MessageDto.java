@@ -9,4 +9,5 @@ public class MessageDto {
     private ChatDto chat;
     private int date;
     private String text;
+    private DocumentDto document;
 }

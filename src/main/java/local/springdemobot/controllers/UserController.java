@@ -20,7 +20,7 @@ public class UserController {
     private TelegramClient telegramClient;
 
     @GetMapping()
-    public ResponseEntity<Object> getAllUsers(@RequestParam(required = false) Integer id) {
+    public ResponseEntity<Object> getAllUsers(@RequestParam(required = false) Long id) {
         if (id == null) {
             return ResponseEntity.ok(null);
         }
