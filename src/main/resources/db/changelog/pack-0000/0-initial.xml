@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.0.xsd
+">
+
+    <changeSet id="Pre initial" author="postgres">
+        <sql>DROP SCHEMA IF EXISTS BOT CASCADE</sql>
+    </changeSet>
+
+    <changeSet id="Initial" author="postgres">
+        <sql>CREATE SCHEMA BOT</sql>
+    </changeSet>
+
+    <changeSet id="Release 1.0.0" author="postgres">
+        <sqlFile path="0-initial.sql" relativeToChangelogFile="true" splitStatements="false"/>
+    </changeSet>
+
+</databaseChangeLog>
