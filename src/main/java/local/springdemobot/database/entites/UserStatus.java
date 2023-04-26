@@ -1,42 +1,17 @@
 package local.springdemobot.database.entites;
+
+import lombok.Data;
+
 import javax.persistence.*;
 
 @Entity
 @Table(schema = "bot", name = "users_status")
+@Data
 public class UserStatus {
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @ManyToOne
-    @JoinColumn(referencedColumnName = "id")
-    private User user;
+    private Long userId;
     private String command;
     private String status;
-
-    public UserStatus() {
-    }
-
-    public User getUser() {
-        return user;
-    }
-
-    public void setUser(User user) {
-        this.user = user;
-    }
-
-    public String getCommand() {
-        return command;
-    }
-
-    public void setCommand(String command) {
-        this.command = command;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
 }

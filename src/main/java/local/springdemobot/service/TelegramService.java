@@ -1,8 +1,8 @@
 package local.springdemobot.service;
 
-import local.springdemobot.enums.TypeUpdate;
-import local.springdemobot.model.UpdateDto;
-import lombok.NonNull;
+import local.springdemobot.database.entites.User;
+import local.springdemobot.database.entites.UserStatus;
+import local.springdemobot.model.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -21,34 +21,78 @@ public class TelegramService {
     private TelegramClient telegramClient;
 
     public void processing(List<UpdateDto> updates) {
-        for (UpdateDto update : updates) {
-            Long userId = update.getMessage().getFrom().getId();
-            if (dbClient.isAuth(userId).isEmpty()) {
-                this.userAuth(userId);
-            }
-            switch (update.getType()) {
-                case TEXT:
-                    log.info("Text");
+        try {
+            for (UpdateDto update : updates) {
+                Long chatId = update.getMessage().getChat().getId();
+                if (!(this.isStart(update)))
                     break;
-                case FILE:
-                    log.info("File");
+                if (!(this.isAuth(update)))
                     break;
-                case OTHER:
-                    log.info("Other");
-                    break;
+                switch (update.getType()) {
+                    case TEXT:
+                        log.info("Text");
+                        MessageSendDto messageSendDto = new MessageSendDto(chatId,
+                                update.getMessage().getText());
+                        telegramClient.sendMessage(messageSendDto);
+                        break;
+                    case FILE:
+                        log.info("File");
+                        break;
+                    case OTHER:
+                        log.info("Other");
+                        break;
+                }
             }
-            if (Objects.equals(update.getType(), TypeUpdate.TEXT)) {
-                log.info("TEXT");
-            }
+        } catch (Exception ignored) {
+            log.info(ignored.toString());
         }
         if (updates.size() > 0) {
-            Long lastOffset = updates.get(updates.size() - 1).getUpdate_id();
-            offsetStore.setOffset(lastOffset + 1);
+            int lastOffset = updates.get(updates.size() - 1).getUpdate_id();
+            offsetStore.setOffset((long) (lastOffset + 1));
         }
     }
 
-    private void userAuth(Long userId) {
-        telegramClient.getNumber(userId);
-        dbClient.userAuth(userId);
+    private Boolean isStart(UpdateDto update) {
+        Long userId = update.getMessage().getFrom().getId();
+        String messageText = update.getMessage().getText();
+        if (dbClient.findUserById(userId).isEmpty()) {
+            return Objects.equals(messageText, "/start");
+        }
+        return true;
+    }
+
+    private Boolean isAuth(UpdateDto update) {
+        Long userId = update.getMessage().getFrom().getId();
+        Long chatId = update.getMessage().getChat().getId();
+        if (dbClient.findUserById(userId).isEmpty()) {
+            telegramClient.sendSharePhone(update.getMessage().getChat().getId());
+            User user = new User();
+            user.setId(userId);
+            user.setName(update.getMessage().getFrom().getFirst_name());
+            dbClient.saveUser(user);
+            UserStatus userStatus = new UserStatus();
+            userStatus.setUserId(user.getId());
+            userStatus.setStatus("auth");
+            dbClient.saveUserStatus(userStatus);
+            return false;
+        } else if (!(dbClient.isAuthDone(userId))) {
+            String phoneNumber = update.getMessage().getContact().getPhone_number();
+            User user = new User();
+            user.setId(userId);
+            user.setName(update.getMessage().getFrom().getFirst_name());
+            user.setNumber(phoneNumber);
+            dbClient.saveUser(user);
+            ReplyMarkupDto deleteKeyBoard = new ReplyMarkupDto();
+            deleteKeyBoard.setRemove_keyboard(true);
+            MessageSendDto messageDeleteKeyBoard = new MessageSendDto(chatId, "Отлично твой номер сохранен");
+            messageDeleteKeyBoard.setReply_markup(deleteKeyBoard);
+            telegramClient.sendMessage(new MessageSendDto(chatId, "Отлично твой номер сохранен"));
+            UserStatus userStatus = new UserStatus();
+            userStatus.setUserId(user.getId());
+            userStatus.setStatus("auth_done");
+            dbClient.saveUserStatus(userStatus);
+            return false;
+        }
+        return true;
     }
 }

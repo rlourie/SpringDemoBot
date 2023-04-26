@@ -10,4 +10,5 @@ public class MessageDto {
     private int date;
     private String text;
     private DocumentDto document;
+    private ContactDto contact;
 }

@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 public class UpdateDto {
-    private Long update_id;
+    private int update_id;
     private MessageDto message;
 
     public TypeUpdate getType() {
