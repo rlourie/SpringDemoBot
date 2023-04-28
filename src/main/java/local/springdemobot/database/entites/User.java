@@ -1,7 +1,9 @@
 package local.springdemobot.database.entites;
 
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.springframework.lang.Nullable;
 
 import javax.persistence.*;
 import java.util.List;
@@ -23,4 +25,10 @@ public class User {
     private List<UserStatus> userStatuses;
 
 
+    public User(Long userId, String firstName) {
+    }
+
+    public User() {
+
+    }
 }

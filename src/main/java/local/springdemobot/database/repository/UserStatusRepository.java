@@ -7,8 +7,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface UserStatusRepository extends JpaRepository<UserStatus, Long> {
     @Query(nativeQuery = true, value = "SELECT * FROM bot.users_status WHERE user_id = :userId and status ='auth_done'")
-    UserStatus findAllByIdAndStatusAuthDone(@Param("userId") Long id);
+    Optional<UserStatus> findAllByIdAndStatusAuthDone(@Param("userId") Long id);
 }

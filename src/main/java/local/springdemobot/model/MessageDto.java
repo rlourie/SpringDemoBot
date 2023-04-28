@@ -11,4 +11,5 @@ public class MessageDto {
     private String text;
     private DocumentDto document;
     private ContactDto contact;
+    private MessageDto reply_to_message;
 }
