@@ -14,4 +14,17 @@ public class UserStatus {
     private Long userId;
     private String command;
     private String status;
+
+
+    public UserStatus(Long userId, String status, String command) {
+        this.userId = userId;
+        this.status = status;
+        this.command = command;
+    }
+
+    public UserStatus(Long userId, String status) {
+        this.userId = userId;
+        this.status = status;
+    }
+
 }

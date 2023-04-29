@@ -1,6 +1,8 @@
 package local.springdemobot.database.entites;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import javax.persistence.*;
@@ -8,6 +10,8 @@ import javax.persistence.*;
 @Table(schema = "bot", name = "document")
 @ToString
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class Document {
     @Id
     private String id;

@@ -1,9 +1,7 @@
 package local.springdemobot.database.entites;
 
 import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.ToString;
-import org.springframework.lang.Nullable;
 
 import javax.persistence.*;
 import java.util.List;
@@ -27,17 +25,19 @@ public class User {
     @ToString.Exclude
     private List<Document> documents;
 
-    public User(Long userId, String firstName) {
+    public User(Long userId, String name, String number) {
         this.id = userId;
-        this.name = firstName;
+        this.name = name;
+        this.number = number;
+    }
+
+    public User(Long userId, String name) {
+        this.id = userId;
+        this.name = name;
     }
 
     public User(Long userId) {
         this.id = userId;
-    }
-
-    public User() {
-
     }
 
 }

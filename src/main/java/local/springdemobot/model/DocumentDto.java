@@ -8,4 +8,5 @@ public class DocumentDto {
     String file_id;
     String file_unique_id;
     String file_size;
+    String caption;
 }

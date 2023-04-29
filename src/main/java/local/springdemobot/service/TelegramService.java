@@ -29,23 +29,21 @@ public class TelegramService {
         try {
             for (UpdateDto update : updates) {
                 Long chatId = update.getMessage().getChat().getId();
-                if (!(this.isStart(update)))
+                if (!(this.isStart(update.getMessage())))
                     break;
-                if (!(this.isAuth(update)))
+                if (!(this.isAuth(update.getMessage())))
                     break;
                 switch (update.getType()) {
                     case TEXT:
                         log.info("Text");
-                        this.processingText(update);
+                        this.processingText(update.getMessage());
                         break;
                     case FILE:
                         log.info("File");
-                        this.processingFile(update);
+                        this.processingFile(update.getMessage());
                         break;
                     case OTHER:
-                        MessageSendDto warnMessage = new MessageSendDto(chatId, "Извините, я не понимаю" +
-                                " вашу команду");
-                        telegramClient.sendMessage(warnMessage);
+                        telegramClient.understandCommand(chatId);
                 }
             }
         } catch (Exception e) {
@@ -57,78 +55,75 @@ public class TelegramService {
         }
     }
 
-    private void processingFile(UpdateDto update) {
-        Long userId = update.getMessage().getFrom().getId();
+    private void processingFile(MessageDto message) {
+        Long userId = message.getFrom().getId();
         if (userStatusRepository.findByUserIdAndCommandUploadAndStatusProcessing(userId).isPresent()) {
-            DocumentDto document = update.getMessage().getDocument();
-            Document documentToSave = new Document();
-            documentToSave.setId(document.getFile_id());
-            documentToSave.setUnique_id(document.getFile_unique_id());
-            documentToSave.setSize(document.getFile_size());
-            documentToSave.setName(document.getFile_name());
-            User user = new User(userId);
-            documentToSave.setUser(user);
+            DocumentDto document = message.getDocument();
+            Document documentToSave = new Document(document.getFile_id(), document.getFile_unique_id(),
+                    document.getFile_size(), document.getFile_name(), new User(userId));
             documentRepository.save(documentToSave);
         }
 
     }
 
-    private void processingText(UpdateDto update) {
-        Long chatId = update.getMessage().getChat().getId();
-        Long userId = update.getMessage().getFrom().getId();
-        Optional<UserStatus> mayBeUserStatus = userStatusRepository.findByUserIdAndCommandUploadAndStatusProcessing(userId);
-        if (mayBeUserStatus.isPresent()) {
-            if (Objects.equals(update.getMessage().getText(), "Готово")) {
-                MessageSendDto infoMessage = new MessageSendDto(chatId, "Файлы загруженны!");
-                ReplyMarkupDto deleteKeyBoard = new ReplyMarkupDto();
-                deleteKeyBoard.setRemove_keyboard(true);
-                infoMessage.setReply_markup(deleteKeyBoard);
-                telegramClient.sendMessage(infoMessage);
-                UserStatus userStatus = mayBeUserStatus.get();
-                userStatus.setStatus("done");
-                userStatusRepository.save(userStatus);
-
-                return;
-            } else {
-                MessageSendDto warnMessage = new MessageSendDto(chatId, "Нажмите на кнопку готово для" +
-                        " завершения загрузки файлов");
-                telegramClient.sendMessage(warnMessage);
-                return;
-            }
+    private void processingText(MessageDto message) {
+        Long chatId = message.getChat().getId();
+        if (mayBeUploadDone(message)) {
+            return;
         }
-        switch (update.getMessage().getText()) {
+        switch (message.getText()) {
             case "/view":
                 log.info("view");
                 break;
             case "/upload":
                 log.info("upload");
-                telegramClient.uploadCommand(update.getMessage().getChat().getId());
-                UserStatus userStatusUploadProcessing = new UserStatus();
-                userStatusUploadProcessing.setUserId(update.getMessage().getFrom().getId());
-                userStatusUploadProcessing.setCommand("/upload");
-                userStatusUploadProcessing.setStatus("processing");
-                userStatusRepository.save(userStatusUploadProcessing);
+                saveUserStatusProcessingCommandUpload(message);
                 break;
             case "/delete":
                 log.info("delete");
                 break;
             default:
-                MessageSendDto warnMessage = new MessageSendDto(chatId, "Извините, я не понимаю вашу команду");
-                telegramClient.sendMessage(warnMessage);
+                telegramClient.understandCommand(chatId);
 
+        }
+    }
+
+    private void saveUserStatusProcessingCommandUpload(MessageDto message) {
+        telegramClient.uploadCommand(message.getChat().getId());
+        UserStatus userStatusUploadProcessing = new UserStatus
+                (message.getFrom().getId(), "processing", "/upload");
+        userStatusRepository.save(userStatusUploadProcessing);
+    }
+
+    private Boolean mayBeUploadDone(MessageDto message) {
+        Long userId = message.getFrom().getId();
+        Long chatId = message.getChat().getId();
+        Optional<UserStatus> mayBeUserStatus = userStatusRepository.
+                findByUserIdAndCommandUploadAndStatusProcessing(userId);
+        if (mayBeUserStatus.isPresent()) {
+            if (Objects.equals(message.getText(), "Готово")) {
+                telegramClient.uploadDone(chatId);
+                UserStatus userStatus = mayBeUserStatus.get();
+                userStatus.setStatus("done");
+                userStatusRepository.save(userStatus);
+                return true;
+            } else {
+                telegramClient.uploadPressDonePlease(chatId);
+                return true;
+            }
+        } else {
+            return false;
         }
     }
 
     private Boolean sharedPhone(MessageDto message) {
         Long userId = message.getFrom().getId();
+        String name = message.getFrom().getFirst_name() + ' ' + message.getFrom().getLast_name() +
+                " @" + message.getFrom().getUsername();
         telegramClient.sendSharePhone(message.getChat().getId());
-        User user = new User();
-        user.setId(userId);
-        user.setName(message.getFrom().getFirst_name());
+        User user = new User(userId, name);
         userRepository.save(user);
-        UserStatus userStatus = new UserStatus();
-        userStatus.setUserId(user.getId());
-        userStatus.setStatus("auth");
+        UserStatus userStatus = new UserStatus(user.getId(), "auth");
         userStatusRepository.save(userStatus);
         return false;
     }
@@ -140,36 +135,31 @@ public class TelegramService {
             return false;
         }
         String phoneNumber = message.getContact().getPhone_number();
-        User user = userRepository.findById(userId).orElse(new User(userId, message.getFrom().getFirst_name()));
-        user.setNumber(phoneNumber);
+        String name = message.getFrom().getFirst_name() + ' ' + message.getFrom().getLast_name() +
+                " @" + message.getFrom().getUsername();
+        User user = userRepository.findById(userId).orElse(new User(userId, name, phoneNumber));
         userRepository.save(user);
-        ReplyMarkupDto deleteKeyBoard = new ReplyMarkupDto();
-        deleteKeyBoard.setRemove_keyboard(true);
-        MessageSendDto messageDeleteKeyBoard = new MessageSendDto(chatId, "Отлично твой номер сохранен");
-        messageDeleteKeyBoard.setReply_markup(deleteKeyBoard);
-        telegramClient.sendMessage(messageDeleteKeyBoard);
-        UserStatus userStatus = new UserStatus();
-        userStatus.setUserId(user.getId());
-        userStatus.setStatus("auth_done");
+        telegramClient.savePhone(chatId);
+        UserStatus userStatus = new UserStatus(user.getId(), "auth_done");
         userStatusRepository.save(userStatus);
         return false;
     }
 
-    private Boolean isStart(UpdateDto update) {
-        Long userId = update.getMessage().getFrom().getId();
-        String messageText = update.getMessage().getText();
+    private Boolean isStart(MessageDto message) {
+        Long userId = message.getFrom().getId();
+        String messageText = message.getText();
         if (userRepository.findById(userId).isEmpty()) {
             return Objects.equals(messageText, "/start");
         }
         return true;
     }
 
-    private Boolean isAuth(UpdateDto update) {
-        Long userId = update.getMessage().getFrom().getId();
+    private Boolean isAuth(MessageDto message) {
+        Long userId = message.getFrom().getId();
         if (userRepository.findById(userId).isEmpty()) {
-            return this.sharedPhone(update.getMessage());
+            return this.sharedPhone(message);
         } else if (userStatusRepository.findAllByIdAndStatusAuthDone(userId).isEmpty()) {
-            return this.savePhone(update.getMessage());
+            return this.savePhone(message);
         }
         return true;
     }
@@ -177,9 +167,7 @@ public class TelegramService {
     private Boolean isAnswerNumber(MessageDto message) {
         Long chatId = message.getChat().getId();
         if (!((message.getReply_to_message() != null) && (message.getContact() != null))) {
-            MessageSendDto warnMessage = new MessageSendDto(chatId, "Не корректный номер телефона, нажмите на" +
-                    " кнопку поделиться контактом");
-            telegramClient.sendMessage(warnMessage);
+            telegramClient.incorrectPhone(chatId);
             return false;
         } else {
             return true;

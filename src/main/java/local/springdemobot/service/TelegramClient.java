@@ -90,6 +90,39 @@ public class TelegramClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
         Gson gson = new GsonBuilder().create();
         HttpEntity<String> request = new HttpEntity<>(gson.toJson(messageSendDto), headers);
-        ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+        restTemplate.postForEntity(url, request, String.class);
+    }
+
+    public void understandCommand(Long chatId) {
+        MessageSendDto warnMessage = new MessageSendDto(chatId, "Извините, я не понимаю вашу команду");
+        sendMessage(warnMessage);
+    }
+
+    public void uploadDone(Long chatId) {
+        MessageSendDto infoMessage = new MessageSendDto(chatId, "Файлы загруженны!");
+        ReplyMarkupDto deleteKeyBoard = new ReplyMarkupDto();
+        deleteKeyBoard.setRemove_keyboard(true);
+        infoMessage.setReply_markup(deleteKeyBoard);
+        sendMessage(infoMessage);
+    }
+
+    public void uploadPressDonePlease(Long chatId) {
+        MessageSendDto warnMessage = new MessageSendDto(chatId, "Нажмите на кнопку готово для" +
+                " завершения загрузки файлов");
+        sendMessage(warnMessage);
+    }
+
+    public void savePhone(Long chatId) {
+        ReplyMarkupDto deleteKeyBoard = new ReplyMarkupDto();
+        deleteKeyBoard.setRemove_keyboard(true);
+        MessageSendDto messageDeleteKeyBoard = new MessageSendDto(chatId, "Отлично твой номер сохранен");
+        messageDeleteKeyBoard.setReply_markup(deleteKeyBoard);
+        sendMessage(messageDeleteKeyBoard);
+    }
+
+    public void incorrectPhone(Long chatId) {
+        MessageSendDto warnMessage = new MessageSendDto(chatId, "Не корректный номер телефона, нажмите на" +
+                " кнопку поделиться контактом");
+        sendMessage(warnMessage);
     }
 }
