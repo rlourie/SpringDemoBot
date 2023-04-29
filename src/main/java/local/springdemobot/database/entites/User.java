@@ -23,12 +23,21 @@ public class User {
     })
     @ToString.Exclude
     private List<UserStatus> userStatuses;
-
+    @OneToMany(mappedBy = "id")
+    @ToString.Exclude
+    private List<Document> documents;
 
     public User(Long userId, String firstName) {
+        this.id = userId;
+        this.name = firstName;
+    }
+
+    public User(Long userId) {
+        this.id = userId;
     }
 
     public User() {
 
     }
+
 }

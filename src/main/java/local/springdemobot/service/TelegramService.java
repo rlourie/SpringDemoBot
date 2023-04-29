@@ -1,7 +1,9 @@
 package local.springdemobot.service;
 
+import local.springdemobot.database.entites.Document;
 import local.springdemobot.database.entites.User;
 import local.springdemobot.database.entites.UserStatus;
+import local.springdemobot.database.repository.DocumentRepository;
 import local.springdemobot.database.repository.UserRepository;
 import local.springdemobot.database.repository.UserStatusRepository;
 import local.springdemobot.model.*;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Component
 @Slf4j
@@ -20,6 +23,7 @@ public class TelegramService {
     private TelegramClient telegramClient;
     private UserStatusRepository userStatusRepository;
     private UserRepository userRepository;
+    private DocumentRepository documentRepository;
 
     public void processing(List<UpdateDto> updates) {
         try {
@@ -44,8 +48,8 @@ public class TelegramService {
                         telegramClient.sendMessage(warnMessage);
                 }
             }
-        } catch (Exception ignored) {
-            log.info(ignored.toString());
+        } catch (Exception e) {
+            log.info(e.toString());
         }
         if (updates.size() > 0) {
             int lastOffset = updates.get(updates.size() - 1).getUpdate_id();
@@ -54,18 +58,56 @@ public class TelegramService {
     }
 
     private void processingFile(UpdateDto update) {
+        Long userId = update.getMessage().getFrom().getId();
+        if (userStatusRepository.findByUserIdAndCommandUploadAndStatusProcessing(userId).isPresent()) {
+            DocumentDto document = update.getMessage().getDocument();
+            Document documentToSave = new Document();
+            documentToSave.setId(document.getFile_id());
+            documentToSave.setUnique_id(document.getFile_unique_id());
+            documentToSave.setSize(document.getFile_size());
+            documentToSave.setName(document.getFile_name());
+            User user = new User(userId);
+            documentToSave.setUser(user);
+            documentRepository.save(documentToSave);
+        }
+
     }
 
     private void processingText(UpdateDto update) {
         Long chatId = update.getMessage().getChat().getId();
+        Long userId = update.getMessage().getFrom().getId();
+        Optional<UserStatus> mayBeUserStatus = userStatusRepository.findByUserIdAndCommandUploadAndStatusProcessing(userId);
+        if (mayBeUserStatus.isPresent()) {
+            if (Objects.equals(update.getMessage().getText(), "Готово")) {
+                MessageSendDto infoMessage = new MessageSendDto(chatId, "Файлы загруженны!");
+                ReplyMarkupDto deleteKeyBoard = new ReplyMarkupDto();
+                deleteKeyBoard.setRemove_keyboard(true);
+                infoMessage.setReply_markup(deleteKeyBoard);
+                telegramClient.sendMessage(infoMessage);
+                UserStatus userStatus = mayBeUserStatus.get();
+                userStatus.setStatus("done");
+                userStatusRepository.save(userStatus);
+
+                return;
+            } else {
+                MessageSendDto warnMessage = new MessageSendDto(chatId, "Нажмите на кнопку готово для" +
+                        " завершения загрузки файлов");
+                telegramClient.sendMessage(warnMessage);
+                return;
+            }
+        }
         switch (update.getMessage().getText()) {
             case "/view":
                 log.info("view");
                 break;
             case "/upload":
                 log.info("upload");
-                MessageSendDto infoAddMessage = new MessageSendDto(chatId, "Прикрипите ваши файлы для загрузки");
-                telegramClient.sendMessage(infoAddMessage);
+                telegramClient.uploadCommand(update.getMessage().getChat().getId());
+                UserStatus userStatusUploadProcessing = new UserStatus();
+                userStatusUploadProcessing.setUserId(update.getMessage().getFrom().getId());
+                userStatusUploadProcessing.setCommand("/upload");
+                userStatusUploadProcessing.setStatus("processing");
+                userStatusRepository.save(userStatusUploadProcessing);
                 break;
             case "/delete":
                 log.info("delete");
@@ -75,25 +117,6 @@ public class TelegramService {
                 telegramClient.sendMessage(warnMessage);
 
         }
-    }
-
-    private Boolean isStart(UpdateDto update) {
-        Long userId = update.getMessage().getFrom().getId();
-        String messageText = update.getMessage().getText();
-        if (userRepository.findById(userId).isEmpty()) {
-            return Objects.equals(messageText, "/start");
-        }
-        return true;
-    }
-
-    private Boolean isAuth(UpdateDto update) {
-        Long userId = update.getMessage().getFrom().getId();
-        if (userRepository.findById(userId).isEmpty()) {
-            return this.sharedPhone(update.getMessage());
-        } else if (userStatusRepository.findAllByIdAndStatusAuthDone(userId).isEmpty()) {
-            return this.savePhone(update.getMessage());
-        }
-        return true;
     }
 
     private Boolean sharedPhone(MessageDto message) {
@@ -130,6 +153,25 @@ public class TelegramService {
         userStatus.setStatus("auth_done");
         userStatusRepository.save(userStatus);
         return false;
+    }
+
+    private Boolean isStart(UpdateDto update) {
+        Long userId = update.getMessage().getFrom().getId();
+        String messageText = update.getMessage().getText();
+        if (userRepository.findById(userId).isEmpty()) {
+            return Objects.equals(messageText, "/start");
+        }
+        return true;
+    }
+
+    private Boolean isAuth(UpdateDto update) {
+        Long userId = update.getMessage().getFrom().getId();
+        if (userRepository.findById(userId).isEmpty()) {
+            return this.sharedPhone(update.getMessage());
+        } else if (userStatusRepository.findAllByIdAndStatusAuthDone(userId).isEmpty()) {
+            return this.savePhone(update.getMessage());
+        }
+        return true;
     }
 
     private Boolean isAnswerNumber(MessageDto message) {

@@ -64,6 +64,26 @@ public class TelegramClient {
         sendMessage(authMessage);
     }
 
+    public void uploadCommand(Long chatId) {
+        KeyDto doneKey = new KeyDto("Готово");
+
+        List<KeyDto> inerList = new ArrayList<>();
+        inerList.add(doneKey);
+        List<List<KeyDto>> listKey = new ArrayList<>();
+        listKey.add(inerList);
+
+        ReplyMarkupDto replyMarkupDto = new ReplyMarkupDto();
+        replyMarkupDto.setKeyboard(listKey);
+        replyMarkupDto.setOne_time_keyboard(true);
+        replyMarkupDto.setResize_keyboard(true);
+
+        MessageSendDto uploadMessage = new MessageSendDto(chatId, "Прикрипите ваши файлы для загрузки и" +
+                " нажмите на кнопку готово");
+        uploadMessage.setReply_markup(replyMarkupDto);
+        sendMessage(uploadMessage);
+
+    }
+
     public void sendMessage(MessageSendDto messageSendDto) {
         String url = String.format("%s/bot%s/sendMessage", telegramUrl, botToken);
         HttpHeaders headers = new HttpHeaders();

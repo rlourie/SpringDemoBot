@@ -4,6 +4,15 @@ import lombok.Data;
 
 @Data
 public class KeyDto {
-    private final String text;
-    private final Boolean request_contact;
+    private String text;
+    private Boolean request_contact;
+
+    public KeyDto(String text) {
+        this.text = text;
+    }
+
+    public KeyDto(String text, boolean request_contact) {
+        this.text = text;
+        this.request_contact = request_contact;
+    }
 }
