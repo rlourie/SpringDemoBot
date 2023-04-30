@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -29,18 +30,16 @@ public class TelegramService {
         try {
             for (UpdateDto update : updates) {
                 Long chatId = update.getMessage().getChat().getId();
-                if (!(this.isStart(update.getMessage())))
+                if (!(isStart(update.getMessage())))
                     break;
-                if (!(this.isAuth(update.getMessage())))
+                if (!(isAuth(update.getMessage())))
                     break;
                 switch (update.getType()) {
                     case TEXT:
-                        log.info("Text");
-                        this.processingText(update.getMessage());
+                        processingText(update.getMessage());
                         break;
                     case FILE:
-                        log.info("File");
-                        this.processingFile(update.getMessage());
+                        processingFile(update.getMessage());
                         break;
                     case OTHER:
                         telegramClient.understandCommand(chatId);
@@ -57,30 +56,38 @@ public class TelegramService {
 
     private void processingFile(MessageDto message) {
         Long userId = message.getFrom().getId();
-        if (userStatusRepository.findByUserIdAndCommandUploadAndStatusProcessing(userId).isPresent()) {
+        boolean upload = userStatusRepository.findByUserIdAndCommandUploadAndStatusProcessing(userId).isPresent();
+        if (upload) {
             DocumentDto document = message.getDocument();
-            Document documentToSave = new Document(document.getFile_id(), document.getFile_unique_id(),
-                    document.getFile_size(), document.getFile_name(), new User(userId));
+            Document documentToSave = new Document(document.getFile_id(), document.getFile_name(), document.getFile_unique_id(),
+                    document.getFile_size(), new User(userId));
             documentRepository.save(documentToSave);
         }
-
     }
 
     private void processingText(MessageDto message) {
         Long chatId = message.getChat().getId();
+        Long userId = message.getFrom().getId();
+        boolean delete = userStatusRepository.findByUserIdAndCommandDeleteAndStatusProcessing(userId).isPresent();
         if (mayBeUploadDone(message)) {
+            return;
+        }
+        if (mayBeDeleteDone(message)) {
+            return;
+        }
+        if (delete) {
+            deleteFiles(message);
             return;
         }
         switch (message.getText()) {
             case "/view":
-                log.info("view");
+                viewFiles(message, true);
                 break;
             case "/upload":
-                log.info("upload");
-                saveUserStatusProcessingCommandUpload(message);
+                uploadFilesStart(message);
                 break;
             case "/delete":
-                log.info("delete");
+                deleteFilesStart(message);
                 break;
             default:
                 telegramClient.understandCommand(chatId);
@@ -88,7 +95,57 @@ public class TelegramService {
         }
     }
 
-    private void saveUserStatusProcessingCommandUpload(MessageDto message) {
+    private void deleteFiles(MessageDto message) {
+        if (documentRepository.findByUserIdAndFileName(
+                message.getFrom().getId(), message.getText()).isPresent()) {
+            Document documentForDelete = documentRepository.findByUserIdAndFileName(
+                    message.getFrom().getId(), message.getText()).get();
+            documentRepository.delete(documentForDelete);
+        } else {
+            telegramClient.nonExistentFile(message.getChat().getId());
+        }
+
+    }
+
+    private void deleteFilesStart(MessageDto message) {
+        List<String> documentNameList = documentRepository.findByUserId(message.getFrom().getId()).stream()
+                .map(Document::getName)
+                .collect(Collectors.toList());
+        if (documentNameList.isEmpty()) {
+            telegramClient.emptyFile(message.getChat().getId());
+            return;
+        }
+        telegramClient.deleteCommand(message.getChat().getId(), documentNameList);
+        viewFiles(message, false);
+        UserStatus userStatusDeleteProcessing = new UserStatus
+                (message.getFrom().getId(), "processing", "/delete");
+        userStatusRepository.save(userStatusDeleteProcessing);
+    }
+
+    private void viewFiles(MessageDto message, Boolean all) {
+        List<Document> documentList;
+        if (all) {
+            documentList = documentRepository.findAll();
+        } else {
+            documentList = documentRepository.findByUserId(message.getFrom().getId());
+        }
+        List<DocumentSendDto> documentSendDtoList = documentList.stream()
+                .map(document -> new DocumentSendDto(
+                        message.getChat().getId(),
+                        document.getUser().getName(),
+                        document.getId())
+                )
+                .collect(Collectors.toList());
+        if (documentSendDtoList.size() == 0) {
+            telegramClient.emptyFile(message.getChat().getId());
+        }
+        for (DocumentSendDto document : documentSendDtoList) {
+            telegramClient.sendDocument(document);
+        }
+
+    }
+
+    private void uploadFilesStart(MessageDto message) {
         telegramClient.uploadCommand(message.getChat().getId());
         UserStatus userStatusUploadProcessing = new UserStatus
                 (message.getFrom().getId(), "processing", "/upload");
@@ -97,30 +154,48 @@ public class TelegramService {
 
     private Boolean mayBeUploadDone(MessageDto message) {
         Long userId = message.getFrom().getId();
-        Long chatId = message.getChat().getId();
+        String uploadDone = "Файлы загруженны!";
         Optional<UserStatus> mayBeUserStatus = userStatusRepository.
                 findByUserIdAndCommandUploadAndStatusProcessing(userId);
-        if (mayBeUserStatus.isPresent()) {
-            if (Objects.equals(message.getText(), "Готово")) {
-                telegramClient.uploadDone(chatId);
-                UserStatus userStatus = mayBeUserStatus.get();
-                userStatus.setStatus("done");
-                userStatusRepository.save(userStatus);
-                return true;
-            } else {
-                telegramClient.uploadPressDonePlease(chatId);
-                return true;
-            }
-        } else {
+        if (mayBeUserStatus.isPresent() && !Objects.equals(message.getText(), "Готово")) {
+            telegramClient.incorrectFile(message.getChat().getId());
+            return true;
+        }
+        mayBeUserStatus
+                .map(userStatus -> mayBeAnyDone(message, userStatus, uploadDone));
+        return mayBeUserStatus.isPresent();
+    }
+
+    private boolean mayBeDeleteDone(MessageDto message) {
+        Long userId = message.getFrom().getId();
+        String deleteDone = "Файлы удалены!";
+        Optional<UserStatus> mayBeUserStatus = userStatusRepository.
+                findByUserIdAndCommandDeleteAndStatusProcessing(userId);
+        if (mayBeUserStatus.isPresent() && documentRepository.findByUserIdAndFileName(
+                message.getFrom().getId(), message.getText()).isPresent()) {
+            return false;
+        } else if (documentRepository.findByUserIdAndFileName(
+                message.getFrom().getId(), message.getText()).isEmpty() &&
+                !(Objects.equals(message.getText(), "Готово"))) {
             return false;
         }
+        return mayBeUserStatus
+                .map(userStatus -> mayBeAnyDone(message, userStatus, deleteDone))
+                .orElse(false);
+    }
+
+    private Boolean mayBeAnyDone(MessageDto message, UserStatus status, String commandDone) {
+        telegramClient.commandDone(message.getChat().getId(), commandDone);
+        status.setStatus("done");
+        userStatusRepository.save(status);
+        return true;
     }
 
     private Boolean sharedPhone(MessageDto message) {
         Long userId = message.getFrom().getId();
         String name = message.getFrom().getFirst_name() + ' ' + message.getFrom().getLast_name() +
                 " @" + message.getFrom().getUsername();
-        telegramClient.sendSharePhone(message.getChat().getId());
+        telegramClient.sharePhone(message.getChat().getId());
         User user = new User(userId, name);
         userRepository.save(user);
         UserStatus userStatus = new UserStatus(user.getId(), "auth");
@@ -166,7 +241,8 @@ public class TelegramService {
 
     private Boolean isAnswerNumber(MessageDto message) {
         Long chatId = message.getChat().getId();
-        if (!((message.getReply_to_message() != null) && (message.getContact() != null))) {
+        //!((message.getReply_to_message() != null) &&
+        if (message.getContact() == null) {
             telegramClient.incorrectPhone(chatId);
             return false;
         } else {

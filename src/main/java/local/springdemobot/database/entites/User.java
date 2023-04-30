@@ -1,6 +1,7 @@
 package local.springdemobot.database.entites;
 
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import javax.persistence.*;
@@ -9,6 +10,7 @@ import java.util.List;
 @Entity
 @Table(schema = "bot", name = "users")
 @ToString
+@NoArgsConstructor
 @Data
 public class User {
     @Id
@@ -39,5 +41,6 @@ public class User {
     public User(Long userId) {
         this.id = userId;
     }
+
 
 }

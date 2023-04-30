@@ -17,4 +17,7 @@ public interface UserStatusRepository extends JpaRepository<UserStatus, Long> {
     @Query(nativeQuery = true, value = "SELECT * FROM bot.users_status" +
             " WHERE user_id = :userId and status ='processing' and command ='/upload'")
     Optional<UserStatus> findByUserIdAndCommandUploadAndStatusProcessing(@Param("userId") Long id);
+    @Query(nativeQuery = true, value = "SELECT * FROM bot.users_status" +
+            " WHERE user_id = :userId and status ='processing' and command ='/delete'")
+    Optional<UserStatus> findByUserIdAndCommandDeleteAndStatusProcessing(@Param("userId") Long id);
 }

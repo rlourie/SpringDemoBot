@@ -2,6 +2,7 @@ package local.springdemobot.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import local.springdemobot.database.entites.Document;
 import local.springdemobot.model.*;
 import lombok.Setter;
 import lombok.ToString;
@@ -45,7 +46,26 @@ public class TelegramClient {
         return response != null ? response.getResult() : null;
     }
 
-    public void sendSharePhone(Long chatId) {
+    public void sendMessage(MessageSendDto message) {
+        String url = String.format("%s/bot%s/sendMessage", telegramUrl, botToken);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Gson gson = new GsonBuilder().create();
+        HttpEntity<String> request = new HttpEntity<>(gson.toJson(message), headers);
+        restTemplate.postForEntity(url, request, String.class);
+    }
+
+    public void sendDocument(DocumentSendDto document) {
+        String url = String.format("%s/bot%s/sendDocument", telegramUrl, botToken);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Gson gson = new GsonBuilder().create();
+        HttpEntity<String> request = new HttpEntity<>(gson.toJson(document), headers);
+        restTemplate.postForEntity(url, request, String.class);
+
+    }
+
+    public void sharePhone(Long chatId) {
         KeyDto sharedKey = new KeyDto("Поделиться номером", true);
 
         List<KeyDto> inerList = new ArrayList<>();
@@ -84,13 +104,23 @@ public class TelegramClient {
 
     }
 
-    public void sendMessage(MessageSendDto messageSendDto) {
-        String url = String.format("%s/bot%s/sendMessage", telegramUrl, botToken);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        Gson gson = new GsonBuilder().create();
-        HttpEntity<String> request = new HttpEntity<>(gson.toJson(messageSendDto), headers);
-        restTemplate.postForEntity(url, request, String.class);
+    public void deleteCommand(Long chatId, List<String> documentNameList) {
+        List<KeyDto> inerList = new ArrayList<>();
+        List<List<KeyDto>> listKey = new ArrayList<>();
+        listKey.add(inerList);
+        for (String name : documentNameList) {
+            KeyDto documentKey = new KeyDto(name);
+            inerList.add(documentKey);
+        }
+        inerList.add(new KeyDto("Готово"));
+        ReplyMarkupDto replyMarkupDto = new ReplyMarkupDto();
+        replyMarkupDto.setKeyboard(listKey);
+        replyMarkupDto.setOne_time_keyboard(true);
+        replyMarkupDto.setResize_keyboard(true);
+
+        MessageSendDto deleteMessage = new MessageSendDto(chatId, "Какие файлы вы хотите удалить?");
+        deleteMessage.setReply_markup(replyMarkupDto);
+        sendMessage(deleteMessage);
     }
 
     public void understandCommand(Long chatId) {
@@ -98,18 +128,12 @@ public class TelegramClient {
         sendMessage(warnMessage);
     }
 
-    public void uploadDone(Long chatId) {
-        MessageSendDto infoMessage = new MessageSendDto(chatId, "Файлы загруженны!");
+    public void commandDone(Long chatId, String text) {
+        MessageSendDto infoMessage = new MessageSendDto(chatId, text);
         ReplyMarkupDto deleteKeyBoard = new ReplyMarkupDto();
         deleteKeyBoard.setRemove_keyboard(true);
         infoMessage.setReply_markup(deleteKeyBoard);
         sendMessage(infoMessage);
-    }
-
-    public void uploadPressDonePlease(Long chatId) {
-        MessageSendDto warnMessage = new MessageSendDto(chatId, "Нажмите на кнопку готово для" +
-                " завершения загрузки файлов");
-        sendMessage(warnMessage);
     }
 
     public void savePhone(Long chatId) {
@@ -123,6 +147,22 @@ public class TelegramClient {
     public void incorrectPhone(Long chatId) {
         MessageSendDto warnMessage = new MessageSendDto(chatId, "Не корректный номер телефона, нажмите на" +
                 " кнопку поделиться контактом");
+        sendMessage(warnMessage);
+    }
+
+    public void nonExistentFile(Long chatId) {
+        MessageSendDto warnMessage = new MessageSendDto(chatId, "Такого файла не сущетсвует, " +
+                "выбирете из предоставленных вам");
+        sendMessage(warnMessage);
+    }
+
+    public void emptyFile(Long chatId) {
+        MessageSendDto infoMessage = new MessageSendDto(chatId, "К сожалению файлов пока нету (((");
+        sendMessage(infoMessage);
+    }
+
+    public void incorrectFile(Long chatId) {
+        MessageSendDto warnMessage = new MessageSendDto(chatId, "Некоректный файл");
         sendMessage(warnMessage);
     }
 }

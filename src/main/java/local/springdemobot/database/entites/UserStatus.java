@@ -1,12 +1,14 @@
 package local.springdemobot.database.entites;
 
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import javax.persistence.*;
 
 @Entity
 @Table(schema = "bot", name = "users_status")
 @Data
+@NoArgsConstructor
 public class UserStatus {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

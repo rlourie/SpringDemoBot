@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import javax.persistence.*;
+
 @Entity
 @Table(schema = "bot", name = "document")
 @ToString
@@ -21,5 +22,6 @@ public class Document {
     @ManyToOne()
     @ToString.Exclude
     private User user;
+
 
 }
