@@ -2,7 +2,6 @@ package local.springdemobot.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import local.springdemobot.database.entites.Document;
 import local.springdemobot.model.*;
 import lombok.Setter;
 import lombok.ToString;

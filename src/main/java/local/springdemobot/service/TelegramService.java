@@ -58,10 +58,7 @@ public class TelegramService {
         Long userId = message.getFrom().getId();
         boolean upload = userStatusRepository.findByUserIdAndCommandUploadAndStatusProcessing(userId).isPresent();
         if (upload) {
-            DocumentDto document = message.getDocument();
-            Document documentToSave = new Document(document.getFile_id(), document.getFile_name(), document.getFile_unique_id(),
-                    document.getFile_size(), new User(userId));
-            documentRepository.save(documentToSave);
+            uploadFiles(message);
         }
     }
 
@@ -69,10 +66,10 @@ public class TelegramService {
         Long chatId = message.getChat().getId();
         Long userId = message.getFrom().getId();
         boolean delete = userStatusRepository.findByUserIdAndCommandDeleteAndStatusProcessing(userId).isPresent();
-        if (mayBeUploadDone(message)) {
+        if (isUploadDone(message)) {
             return;
         }
-        if (mayBeDeleteDone(message)) {
+        if (isDeleteDone(message)) {
             return;
         }
         if (delete) {
@@ -94,6 +91,7 @@ public class TelegramService {
 
         }
     }
+    // DELETE
 
     private void deleteFiles(MessageDto message) {
         if (documentRepository.findByUserIdAndFileName(
@@ -122,6 +120,26 @@ public class TelegramService {
         userStatusRepository.save(userStatusDeleteProcessing);
     }
 
+    private boolean isDeleteDone(MessageDto message) {
+        Long userId = message.getFrom().getId();
+        String deleteDone = "Файлы удалены!";
+        Optional<UserStatus> mayBeUserStatus = userStatusRepository.
+                findByUserIdAndCommandDeleteAndStatusProcessing(userId);
+        if (mayBeUserStatus.isPresent() && documentRepository.findByUserIdAndFileName(
+                message.getFrom().getId(), message.getText()).isPresent()) {
+            return false;
+        } else if (documentRepository.findByUserIdAndFileName(
+                message.getFrom().getId(), message.getText()).isEmpty() &&
+                !(Objects.equals(message.getText(), "Готово"))) {
+            return false;
+        }
+        return mayBeUserStatus
+                .map(userStatus -> saveDoneStatus(message, userStatus, deleteDone))
+                .orElse(false);
+    }
+
+
+    // VIEW
     private void viewFiles(MessageDto message, Boolean all) {
         List<Document> documentList;
         if (all) {
@@ -145,6 +163,15 @@ public class TelegramService {
 
     }
 
+
+    // UPLOAD
+    private void uploadFiles(MessageDto message) {
+        DocumentDto document = message.getDocument();
+        Document documentToSave = new Document(document.getFile_id(), document.getFile_name(), document.getFile_unique_id(),
+                document.getFile_size(), new User(message.getFrom().getId()));
+        documentRepository.save(documentToSave);
+    }
+
     private void uploadFilesStart(MessageDto message) {
         telegramClient.uploadCommand(message.getChat().getId());
         UserStatus userStatusUploadProcessing = new UserStatus
@@ -152,7 +179,7 @@ public class TelegramService {
         userStatusRepository.save(userStatusUploadProcessing);
     }
 
-    private Boolean mayBeUploadDone(MessageDto message) {
+    private Boolean isUploadDone(MessageDto message) {
         Long userId = message.getFrom().getId();
         String uploadDone = "Файлы загруженны!";
         Optional<UserStatus> mayBeUserStatus = userStatusRepository.
@@ -162,29 +189,12 @@ public class TelegramService {
             return true;
         }
         mayBeUserStatus
-                .map(userStatus -> mayBeAnyDone(message, userStatus, uploadDone));
+                .map(userStatus -> saveDoneStatus(message, userStatus, uploadDone));
         return mayBeUserStatus.isPresent();
     }
 
-    private boolean mayBeDeleteDone(MessageDto message) {
-        Long userId = message.getFrom().getId();
-        String deleteDone = "Файлы удалены!";
-        Optional<UserStatus> mayBeUserStatus = userStatusRepository.
-                findByUserIdAndCommandDeleteAndStatusProcessing(userId);
-        if (mayBeUserStatus.isPresent() && documentRepository.findByUserIdAndFileName(
-                message.getFrom().getId(), message.getText()).isPresent()) {
-            return false;
-        } else if (documentRepository.findByUserIdAndFileName(
-                message.getFrom().getId(), message.getText()).isEmpty() &&
-                !(Objects.equals(message.getText(), "Готово"))) {
-            return false;
-        }
-        return mayBeUserStatus
-                .map(userStatus -> mayBeAnyDone(message, userStatus, deleteDone))
-                .orElse(false);
-    }
 
-    private Boolean mayBeAnyDone(MessageDto message, UserStatus status, String commandDone) {
+    private Boolean saveDoneStatus(MessageDto message, UserStatus status, String commandDone) {
         telegramClient.commandDone(message.getChat().getId(), commandDone);
         status.setStatus("done");
         userStatusRepository.save(status);
