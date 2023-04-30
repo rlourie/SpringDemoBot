@@ -9,7 +9,6 @@ import java.util.List;
 
 @Entity
 @Table(schema = "bot", name = "users")
-@ToString
 @NoArgsConstructor
 @Data
 public class User {
@@ -17,10 +16,8 @@ public class User {
     private Long id;
     private String name;
     private String number;
-    @OneToMany(fetch = FetchType.LAZY)
-    @JoinColumns({
-            @JoinColumn(name = "id")
-    })
+    private Boolean admin = false;
+    @OneToMany(mappedBy = "id")
     @ToString.Exclude
     private List<UserStatus> userStatuses;
     @OneToMany(mappedBy = "id")
@@ -42,5 +39,15 @@ public class User {
         this.id = userId;
     }
 
+    public User(Long userId, Boolean admin) {
+        this.id = userId;
+        this.admin = admin;
+    }
 
+    @Override
+    public String toString() {
+        return "id: " + id + "\n" +
+                "Имя: " + name + "\n" +
+                "Номер: " + number;
+    }
 }

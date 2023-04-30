@@ -2,6 +2,7 @@ package local.springdemobot.database.entites;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import javax.persistence.*;
 
@@ -13,19 +14,21 @@ public class UserStatus {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long userId;
+    @ManyToOne()
+    @ToString.Exclude
+    private User user;
     private String command;
     private String status;
 
 
-    public UserStatus(Long userId, String status, String command) {
-        this.userId = userId;
+    public UserStatus(User user, String status, String command) {
+        this.user = user;
         this.status = status;
         this.command = command;
     }
 
-    public UserStatus(Long userId, String status) {
-        this.userId = userId;
+    public UserStatus(User user, String status) {
+        this.user = user;
         this.status = status;
     }
 

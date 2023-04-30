@@ -2,9 +2,9 @@ package local.springdemobot.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import local.springdemobot.database.entites.User;
 import local.springdemobot.model.*;
 import lombok.Setter;
-import lombok.ToString;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.http.*;
@@ -16,7 +16,6 @@ import java.net.URISyntaxException;
 import java.util.*;
 
 
-@ToString
 @Component
 @ConfigurationProperties(prefix = "springdemobot.telegram-client")
 @Setter
@@ -64,6 +63,11 @@ public class TelegramClient {
 
     }
 
+    public void sendUser(User user, Long chatId) {
+        MessageSendDto userMessage = new MessageSendDto(chatId, user.toString());
+        sendMessage(userMessage);
+    }
+
     public void sharePhone(Long chatId) {
         KeyDto sharedKey = new KeyDto("Поделиться номером", true);
 
@@ -103,13 +107,13 @@ public class TelegramClient {
 
     }
 
-    public void deleteCommand(Long chatId, List<String> documentNameList) {
+    public void deleteCommand(Long chatId, List<String> nameList, String text) {
         List<KeyDto> inerList = new ArrayList<>();
         List<List<KeyDto>> listKey = new ArrayList<>();
         listKey.add(inerList);
-        for (String name : documentNameList) {
-            KeyDto documentKey = new KeyDto(name);
-            inerList.add(documentKey);
+        for (String name : nameList) {
+            KeyDto key = new KeyDto(name);
+            inerList.add(key);
         }
         inerList.add(new KeyDto("Готово"));
         ReplyMarkupDto replyMarkupDto = new ReplyMarkupDto();
@@ -117,7 +121,7 @@ public class TelegramClient {
         replyMarkupDto.setOne_time_keyboard(true);
         replyMarkupDto.setResize_keyboard(true);
 
-        MessageSendDto deleteMessage = new MessageSendDto(chatId, "Какие файлы вы хотите удалить?");
+        MessageSendDto deleteMessage = new MessageSendDto(chatId, text);
         deleteMessage.setReply_markup(replyMarkupDto);
         sendMessage(deleteMessage);
     }
@@ -162,6 +166,11 @@ public class TelegramClient {
 
     public void incorrectFile(Long chatId) {
         MessageSendDto warnMessage = new MessageSendDto(chatId, "Некоректный файл");
+        sendMessage(warnMessage);
+    }
+
+    public void incorrectUserId(Long chatId) {
+        MessageSendDto warnMessage = new MessageSendDto(chatId, "Некоректный id пользователя");
         sendMessage(warnMessage);
     }
 }
