@@ -13,7 +13,7 @@ import java.util.Optional;
 @Repository
 public interface DocumentRepository extends JpaRepository<Document, String> {
     @Query(nativeQuery = true, value = "SELECT * FROM bot.document" +
-            " WHERE user_id = :userId and name =:fileName limit 1")
+            " WHERE user_id = :userId and name = :fileName limit 1")
     Optional<Document> findByUserIdAndFileName(@Param("userId") Long id, @Param("fileName") String name);
 
     @Query(nativeQuery = true, value = "SELECT * FROM bot.document WHERE user_id = :userId")

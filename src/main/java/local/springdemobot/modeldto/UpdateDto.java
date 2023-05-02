@@ -1,4 +1,4 @@
-package local.springdemobot.model;
+package local.springdemobot.modeldto;
 
 import local.springdemobot.enums.TypeUpdate;
 import lombok.Data;

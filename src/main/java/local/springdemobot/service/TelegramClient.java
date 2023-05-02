@@ -3,7 +3,8 @@ package local.springdemobot.service;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import local.springdemobot.database.entites.User;
-import local.springdemobot.model.*;
+import local.springdemobot.model.OffsetStore;
+import local.springdemobot.modeldto.*;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -126,7 +127,7 @@ public class TelegramClient {
         sendMessage(deleteMessage);
     }
 
-    public void understandCommand(Long chatId) {
+    public void nonUnderstandCommand(Long chatId) {
         MessageSendDto warnMessage = new MessageSendDto(chatId, "Извините, я не понимаю вашу команду");
         sendMessage(warnMessage);
     }
@@ -137,14 +138,6 @@ public class TelegramClient {
         deleteKeyBoard.setRemove_keyboard(true);
         infoMessage.setReply_markup(deleteKeyBoard);
         sendMessage(infoMessage);
-    }
-
-    public void savePhone(Long chatId) {
-        ReplyMarkupDto deleteKeyBoard = new ReplyMarkupDto();
-        deleteKeyBoard.setRemove_keyboard(true);
-        MessageSendDto messageDeleteKeyBoard = new MessageSendDto(chatId, "Отлично твой номер сохранен");
-        messageDeleteKeyBoard.setReply_markup(deleteKeyBoard);
-        sendMessage(messageDeleteKeyBoard);
     }
 
     public void incorrectPhone(Long chatId) {
@@ -171,6 +164,12 @@ public class TelegramClient {
 
     public void incorrectUserId(Long chatId) {
         MessageSendDto warnMessage = new MessageSendDto(chatId, "Некоректный id пользователя");
+        sendMessage(warnMessage);
+    }
+
+    public void unAuth(Long chatId) {
+        MessageSendDto warnMessage = new MessageSendDto(chatId, "Вы не смогли пройти авторизацию " +
+                "поробуйте снова");
         sendMessage(warnMessage);
     }
 }

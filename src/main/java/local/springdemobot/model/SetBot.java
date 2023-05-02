@@ -1,4 +1,4 @@
-package local.springdemobot.configuration;
+package local.springdemobot.model;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @Getter
 @Setter
 @Component
-public class ConfigBot {
+public class SetBot {
     private Long adminGroupId;
     private String botUserName;
 }

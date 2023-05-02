@@ -16,37 +16,32 @@ public class User {
     private Long id;
     private String name;
     private String number;
-    private Boolean admin = false;
-    @OneToMany(mappedBy = "id")
-    @ToString.Exclude
-    private List<UserStatus> userStatuses;
+    private String command;
+    private String state;
+    private Boolean auth;
     @OneToMany(mappedBy = "id")
     @ToString.Exclude
     private List<Document> documents;
 
-    public User(Long userId, String name, String number) {
-        this.id = userId;
+    public User(Long id, String name, String number) {
+        this.id = id;
         this.name = name;
         this.number = number;
     }
 
-    public User(Long userId, String name) {
-        this.id = userId;
+    public User(Long id, String name) {
+        this.id = id;
         this.name = name;
     }
 
-    public User(Long userId) {
-        this.id = userId;
+    public User(Long id) {
+        this.id = id;
     }
 
-    public User(Long userId, Boolean admin) {
-        this.id = userId;
-        this.admin = admin;
-    }
 
     @Override
     public String toString() {
-        return "id: " + id + "\n" +
+        return "Телеграм id: " + id + "\n" +
                 "Имя: " + name + "\n" +
                 "Номер: " + number;
     }

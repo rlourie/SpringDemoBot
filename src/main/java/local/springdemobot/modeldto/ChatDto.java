@@ -1,4 +1,4 @@
-package local.springdemobot.model;
+package local.springdemobot.modeldto;
 
 import lombok.Data;
 

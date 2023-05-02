@@ -1,13 +1,16 @@
 package local.springdemobot.service;
 
-import local.springdemobot.configuration.ConfigBot;
+import local.springdemobot.model.SetBot;
 import local.springdemobot.database.entites.Document;
 import local.springdemobot.database.entites.User;
-import local.springdemobot.database.entites.UserStatus;
 import local.springdemobot.database.repository.DocumentRepository;
+import local.springdemobot.database.repository.NumberRepository;
 import local.springdemobot.database.repository.UserRepository;
-import local.springdemobot.database.repository.UserStatusRepository;
-import local.springdemobot.model.*;
+import local.springdemobot.enums.TypeCommands;
+import local.springdemobot.enums.TypeStates;
+import local.springdemobot.model.Command;
+import local.springdemobot.model.OffsetStore;
+import local.springdemobot.modeldto.*;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -17,44 +20,27 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+
 @Component
 @Slf4j
 @AllArgsConstructor
 public class TelegramService {
     private OffsetStore offsetStore;
-    private ConfigBot configBot;
+    private SetBot bot;
     private TelegramClient telegramClient;
-    private UserStatusRepository userStatusRepository;
     private UserRepository userRepository;
     private DocumentRepository documentRepository;
+    private NumberRepository numberRepository;
+    private Command command;
 
 
     public void processing(List<UpdateDto> updates) {
         try {
             for (UpdateDto update : updates) {
-                if (Objects.equals(update.getMessage().getChat().getId(), configBot.getAdminGroupId())) {
-                    String viewCommand = "/view" + configBot.getBotUserName();
-                    if (Objects.equals(update.getMessage().getText(), viewCommand)) {
-                        viewAllUser();
-                    } else {
-                        processingAdmin(update.getMessage());
-                    }
+                if (Objects.equals(update.getMessage().getChat().getId(), bot.getAdminGroupId())) {
+                    processingAdmin(update);
                 } else {
-                    Long chatId = update.getMessage().getChat().getId();
-                    if (!(isStart(update.getMessage())))
-                        break;
-                    if (!(isAuth(update.getMessage())))
-                        break;
-                    switch (update.getType()) {
-                        case TEXT:
-                            processingText(update.getMessage());
-                            break;
-                        case FILE:
-                            processingFile(update.getMessage());
-                            break;
-                        case OTHER:
-                            telegramClient.understandCommand(chatId);
-                    }
+                    processingUser(update);
                 }
             }
         } catch (Exception e) {
@@ -66,83 +52,45 @@ public class TelegramService {
         }
     }
 
-    //*ADMIN*
-    private void processingAdmin(MessageDto message) {
-        boolean delete = userStatusRepository.findByUserIdAndCommandDeleteAdminAndStatusProcessing(
-                message.getFrom().getId()).isPresent();
-        if (isDeleteAdminDone(message)) {
+    private void processingUser(UpdateDto update) {
+        Long chatId = update.getMessage().getChat().getId();
+        if (!(isStart(update.getMessage())))
             return;
+        if (!(isAuth(update.getMessage())))
+            return;
+        switch (update.getType()) {
+            case TEXT:
+                processingText(update.getMessage());
+                break;
+            case FILE:
+                processingFile(update.getMessage());
+                break;
+            case OTHER:
+                telegramClient.nonUnderstandCommand(chatId);
         }
-        if (delete) {
-            deleteUser(message);
-        }
-        if (Objects.equals(message.getText(), ("/create" + configBot.getBotUserName()))) {
 
-        }
-        if (Objects.equals(message.getText(), ("/delete" + configBot.getBotUserName()))) {
-            List<String> userList = userRepository.findAll().stream()
-                    .map(x -> x.getId().toString())
-                    .collect(Collectors.toList());
-            telegramClient.deleteCommand(configBot.getAdminGroupId(), userList,
-                    "Каких пользователей вы хотите удалить?");
-            viewAllUser();
-            User user = userRepository.findById(message.getFrom().getId())
-                    .orElse(new User(message.getFrom().getId(), true));
-            user.setAdmin(true);
-            userRepository.save(user);
-
-            UserStatus userStatus = new UserStatus(
-                    user, "processing", "/delete" + configBot.getBotUserName());
-            userStatusRepository.save(userStatus);
-        }
     }
 
-    private boolean isDeleteAdminDone(MessageDto message) {
-        Long userId = message.getFrom().getId();
-        String deleteDone = "Пользовтели удалены";
-        Optional<UserStatus> mayBeUserStatus = userStatusRepository.
-                findByUserIdAndCommandDeleteAdminAndStatusProcessing(userId);
-        if (mayBeUserStatus.isEmpty()) {
-            return false;
-        }
-        if (Objects.equals(message.getText(), "Готово")) {
-            return mayBeUserStatus
-                    .map(userStatus -> saveDoneStatus(message, userStatus, deleteDone))
-                    .orElse(false);
-        }
-        long mayBeDeleteId;
-        try {
-            mayBeDeleteId = Long.parseLong(message.getText());
-        } catch (NumberFormatException e) {
-            telegramClient.incorrectUserId(message.getChat().getId());
-            return true;
-        }
-        if (userRepository.findById(mayBeDeleteId).isEmpty()) {
-            telegramClient.incorrectUserId(message.getChat().getId());
-            return true;
-        }
-        return false;
+    private void processingAdmin(UpdateDto update) {
+
     }
 
-    private void deleteUser(MessageDto message) {
-        Long userId = Long.valueOf(message.getText());
-        documentRepository.deleteByUserId(userId);
-        userStatusRepository.deleteByUserId(userId);
-        userRepository.deleteById(userId);
-    }
+    //*ADMIN*
 
     private void viewAllUser() {
         List<User> userList = userRepository.findAll();
         for (User user : userList) {
-            telegramClient.sendUser(user, configBot.getAdminGroupId());
+            telegramClient.sendUser(user, bot.getAdminGroupId());
         }
     }
-
 
     //*USER*
     private void processingFile(MessageDto message) {
         Long userId = message.getFrom().getId();
-        boolean upload = userStatusRepository.findByUserIdAndCommandUploadAndStatusProcessing(userId).isPresent();
+        boolean upload = userRepository.findByIdAndCommandAndState(
+                userId,
+                TypeCommands.UPLOAD.getTitle(),
+                TypeStates.PROCESSING.getTitle()).isPresent();
         if (upload) {
             uploadFiles(message);
         }
@@ -151,7 +99,10 @@ public class TelegramService {
     private void processingText(MessageDto message) {
         Long chatId = message.getChat().getId();
         Long userId = message.getFrom().getId();
-        boolean delete = userStatusRepository.findByUserIdAndCommandDeleteAndStatusProcessing(userId).isPresent();
+        boolean delete = userRepository.findByIdAndCommandAndState(
+                userId,
+                TypeCommands.DELETE.getTitle(),
+                TypeStates.PROCESSING.getTitle()).isPresent();
         if (isUploadDone(message)) {
             return;
         }
@@ -162,18 +113,18 @@ public class TelegramService {
             deleteFiles(message);
             return;
         }
-        switch (message.getText()) {
-            case "/view":
+        switch (command.getCommand(message)) {
+            case VIEW:
                 viewFiles(message, true);
                 break;
-            case "/upload":
+            case UPLOAD:
                 uploadFilesStart(message);
                 break;
-            case "/delete":
+            case DELETE:
                 deleteFilesStart(message);
                 break;
             default:
-                telegramClient.understandCommand(chatId);
+                telegramClient.nonUnderstandCommand(chatId);
 
         }
     }
@@ -201,27 +152,36 @@ public class TelegramService {
         }
         telegramClient.deleteCommand(message.getChat().getId(), documentNameList, "Какие файлы вы хотите удалить?");
         viewFiles(message, false);
-        UserStatus userStatusDeleteProcessing = new UserStatus
-                (new User(message.getFrom().getId()), "processing", "/delete");
-        userStatusRepository.save(userStatusDeleteProcessing);
+        User userDeleteProcessing = userRepository.findById(message.getFrom().getId())
+                .orElse(new User(message.getFrom().getId()));
+        userDeleteProcessing.setCommand(TypeCommands.DELETE.getTitle());
+        userDeleteProcessing.setState("processing");
+        userRepository.save(userDeleteProcessing);
     }
 
     private boolean isDeleteDone(MessageDto message) {
         Long userId = message.getFrom().getId();
         String deleteDone = "Файлы удалены!";
-        Optional<UserStatus> mayBeUserStatus = userStatusRepository.
-                findByUserIdAndCommandDeleteAndStatusProcessing(userId);
-        if (mayBeUserStatus.isPresent() && documentRepository.findByUserIdAndFileName(
-                message.getFrom().getId(), message.getText()).isPresent()) {
+        Optional<User> userDeleteProcessing = userRepository.
+                findByIdAndCommandAndState(userId,
+                        TypeCommands.DELETE.getTitle(),
+                        TypeStates.PROCESSING.getTitle());
+        if (userDeleteProcessing.isPresent() && documentRepository.findByUserIdAndFileName(
+                userId,
+                message.getText()).isPresent()) {
             return false;
-        } else if (documentRepository.findByUserIdAndFileName(
-                message.getFrom().getId(), message.getText()).isEmpty() &&
+        }
+        if (documentRepository.findByUserIdAndFileName(
+                userId,
+                message.getText()).isEmpty() &&
                 !(Objects.equals(message.getText(), "Готово"))) {
             return false;
         }
-        return mayBeUserStatus
-                .map(userStatus -> saveDoneStatus(message, userStatus, deleteDone))
-                .orElse(false);
+        if (userDeleteProcessing.isPresent() && Objects.equals(message.getText(), "Готово")) {
+            saveDoneState(message, userDeleteProcessing.get(), deleteDone);
+            return true;
+        }
+        return false;
     }
 
 
@@ -253,76 +213,83 @@ public class TelegramService {
     // UPLOAD
     private void uploadFiles(MessageDto message) {
         DocumentDto document = message.getDocument();
-        Document documentToSave = new Document(document.getFile_id(), document.getFile_name(), document.getFile_unique_id(),
-                document.getFile_size(), new User(message.getFrom().getId()));
+        Document documentToSave = new Document(document.getFileId(), document.getFileName(), document.getFileUniqueId(),
+                document.getFileSize(), new User(message.getFrom().getId()));
         documentRepository.save(documentToSave);
     }
 
     private void uploadFilesStart(MessageDto message) {
         telegramClient.uploadCommand(message.getChat().getId());
-        UserStatus userStatusUploadProcessing = new UserStatus
-                (new User(message.getFrom().getId()), "processing", "/upload");
-        userStatusRepository.save(userStatusUploadProcessing);
+        User userUploadProcessing = userRepository.findById(message.getFrom().getId())
+                .orElse(new User(message.getFrom().getId()));
+        userUploadProcessing.setCommand(TypeCommands.UPLOAD.getTitle());
+        userUploadProcessing.setState(TypeStates.PROCESSING.getTitle());
+        userRepository.save(userUploadProcessing);
     }
 
     private Boolean isUploadDone(MessageDto message) {
         Long userId = message.getFrom().getId();
         String uploadDone = "Файлы загруженны!";
-        Optional<UserStatus> mayBeUserStatus = userStatusRepository.
-                findByUserIdAndCommandUploadAndStatusProcessing(userId);
-        if (mayBeUserStatus.isPresent() && !Objects.equals(message.getText(), "Готово")) {
+        Optional<User> processingUploadUser = userRepository.findByIdAndCommandAndState(userId,
+                TypeCommands.UPLOAD.getTitle(),
+                TypeStates.PROCESSING.getTitle());
+        if (processingUploadUser.isPresent() && !Objects.equals(message.getText(), "Готово")) {
             telegramClient.incorrectFile(message.getChat().getId());
             return true;
         }
-        mayBeUserStatus
-                .map(userStatus -> saveDoneStatus(message, userStatus, uploadDone));
-        return mayBeUserStatus.isPresent();
+        if (processingUploadUser.isPresent() && Objects.equals(message.getText(), "Готово")) {
+            saveDoneState(message, processingUploadUser.get(), uploadDone);
+            return true;
+        }
+        return false;
+
     }
 
 
-    private Boolean saveDoneStatus(MessageDto message, UserStatus status, String commandDone) {
+    private void saveDoneState(MessageDto message, User user, String commandDone) {
         telegramClient.commandDone(message.getChat().getId(), commandDone);
-        status.setStatus("done");
-        userStatusRepository.save(status);
-        return true;
+        user.setState(TypeStates.DONE.getTitle());
+        userRepository.save(user);
     }
 
-    private Boolean sharedPhone(MessageDto message) {
+    private void sharedPhone(MessageDto message) {
         Long userId = message.getFrom().getId();
-        String name = message.getFrom().getFirst_name() + ' ' + message.getFrom().getLast_name() +
+        String userName = message.getFrom().getFirstName() + ' ' + message.getFrom().getLastName() +
                 " @" + message.getFrom().getUsername();
         telegramClient.sharePhone(message.getChat().getId());
-        User user = new User(userId, name);
+        User user = new User(userId, userName);
+        user.setCommand(TypeCommands.AUTH.getTitle());
+        user.setState(TypeStates.PROCESSING.getTitle());
         userRepository.save(user);
-        UserStatus userStatus = new UserStatus(new User(user.getId()), "auth");
-        userStatusRepository.save(userStatus);
-        return false;
     }
 
-    private Boolean savePhone(MessageDto message) {
+    private void tryAuth(MessageDto message) {
         Long userId = message.getFrom().getId();
         Long chatId = message.getChat().getId();
-        if (!(this.isAnswerNumber(message))) {
-            return false;
+        String authDone = "Вы авторизовались!";
+        if (isNotNumber(message)) {
+            return;
         }
-        String phoneNumber = message.getContact().getPhone_number();
-        String name = message.getFrom().getFirst_name() + ' ' + message.getFrom().getLast_name() +
+        String phoneNumber = message.getContact().getPhoneNumber();
+        String name = message.getFrom().getFirstName() + ' ' + message.getFrom().getLastName() +
                 " @" + message.getFrom().getUsername();
         User user = userRepository.findById(userId).orElse(new User(userId, name, phoneNumber));
         user.setNumber(phoneNumber);
         user.setName(name);
+        if (numberRepository.findByNumber(phoneNumber).isPresent()) {
+            user.setAuth(true);
+            saveDoneState(message, user, authDone);
+            return;
+        }
         userRepository.save(user);
-        telegramClient.savePhone(chatId);
-        UserStatus userStatus = new UserStatus(new User(user.getId()), "auth_done");
-        userStatusRepository.save(userStatus);
-        return false;
+        telegramClient.unAuth(chatId);
     }
 
     private Boolean isStart(MessageDto message) {
         Long userId = message.getFrom().getId();
         String messageText = message.getText();
         if (userRepository.findById(userId).isEmpty()) {
-            return Objects.equals(messageText, "/start");
+            return Objects.equals(messageText, TypeCommands.START.getTitle());
         }
         return true;
     }
@@ -330,21 +297,23 @@ public class TelegramService {
     private Boolean isAuth(MessageDto message) {
         Long userId = message.getFrom().getId();
         if (userRepository.findById(userId).isEmpty()) {
-            return this.sharedPhone(message);
-        } else if (userStatusRepository.findAllByIdAndStatusAuthDone(userId).isEmpty()) {
-            return this.savePhone(message);
+            sharedPhone(message);
+            return false;
+        } else if ((userRepository.findById(userId).get().getAuth()) == null
+                || !userRepository.findById(userId).get().getAuth()) {
+            tryAuth(message);
+            return false;
         }
         return true;
     }
 
-    private Boolean isAnswerNumber(MessageDto message) {
+    private Boolean isNotNumber(MessageDto message) {
         Long chatId = message.getChat().getId();
-        //!((message.getReply_to_message() != null) &&
         if (message.getContact() == null) {
             telegramClient.incorrectPhone(chatId);
-            return false;
-        } else {
             return true;
+        } else {
+            return false;
         }
     }
 
