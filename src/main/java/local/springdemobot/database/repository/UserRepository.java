@@ -18,4 +18,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
                                               @Param("state") String state);
 
 
+    Optional<User> findByNumber(String number);
 }

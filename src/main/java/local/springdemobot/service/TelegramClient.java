@@ -146,6 +146,16 @@ public class TelegramClient {
         sendMessage(warnMessage);
     }
 
+    public void incorrectUserPhoneAdmin(Long chatId) {
+        MessageSendDto warnMessage = new MessageSendDto(chatId, "Пользователь с таким номером не найден");
+        sendMessage(warnMessage);
+    }
+
+    public void incorrectPhoneAdmin(Long chatId) {
+        MessageSendDto warnMessage = new MessageSendDto(chatId, "Номер в базе телефонов не найден");
+        sendMessage(warnMessage);
+    }
+
     public void nonExistentFile(Long chatId) {
         MessageSendDto warnMessage = new MessageSendDto(chatId, "Такого файла не сущетсвует, " +
                 "выбирете из предоставленных вам");

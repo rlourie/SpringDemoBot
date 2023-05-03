@@ -1,15 +1,16 @@
 package local.springdemobot.enums;
 
-public enum TypeCommands {
+public enum TypeUserCommands {
     UPLOAD("/upload"),
     VIEW("/view"),
     DELETE("/delete"),
     START("/start"),
     AUTH("auth"),
+    CREATE("/create"),
     OTHER("");
     private final String title;
 
-    TypeCommands(String title) {
+    TypeUserCommands(String title) {
         this.title = title;
     }
 

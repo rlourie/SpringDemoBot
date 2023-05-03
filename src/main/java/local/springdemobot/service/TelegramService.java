@@ -1,20 +1,23 @@
 package local.springdemobot.service;
 
+import local.springdemobot.database.entites.Numbers;
+import local.springdemobot.model.Command;
 import local.springdemobot.model.SetBot;
 import local.springdemobot.database.entites.Document;
 import local.springdemobot.database.entites.User;
 import local.springdemobot.database.repository.DocumentRepository;
 import local.springdemobot.database.repository.NumberRepository;
 import local.springdemobot.database.repository.UserRepository;
-import local.springdemobot.enums.TypeCommands;
+import local.springdemobot.enums.TypeUserCommands;
 import local.springdemobot.enums.TypeStates;
-import local.springdemobot.model.Command;
+import local.springdemobot.model.CommandBuilder;
 import local.springdemobot.model.OffsetStore;
 import local.springdemobot.modeldto.*;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -31,7 +34,12 @@ public class TelegramService {
     private UserRepository userRepository;
     private DocumentRepository documentRepository;
     private NumberRepository numberRepository;
-    private Command command;
+    private CommandBuilder commandBuilder;
+
+    @PostConstruct
+    private void postSetting() {
+        commandBuilder.setAdminPostfix(bot.getBotUserName());
+    }
 
 
     public void processing(List<UpdateDto> updates) {
@@ -72,6 +80,19 @@ public class TelegramService {
     }
 
     private void processingAdmin(UpdateDto update) {
+        Command adminCommand = commandBuilder.parseToCommand(update.getMessage());
+        switch (adminCommand.getTypeCommand()) {
+            case VIEW:
+                viewAllUser();
+                break;
+            case CREATE:
+                createNumber(adminCommand);
+                break;
+            case DELETE:
+                deleteNumberAndUser(adminCommand);
+                break;
+
+        }
 
     }
 
@@ -79,17 +100,54 @@ public class TelegramService {
 
     private void viewAllUser() {
         List<User> userList = userRepository.findAll();
+        List<Numbers> numberList = numberRepository.findAll();
+        telegramClient.sendMessage(new MessageSendDto(bot.getAdminGroupId(), "ПОЛЬЗОВАТЕЛИ:"));
         for (User user : userList) {
             telegramClient.sendUser(user, bot.getAdminGroupId());
         }
+        telegramClient.sendMessage(new MessageSendDto(bot.getAdminGroupId(), "ТЕЛЕФОНЫ:"));
+        for (Numbers number : numberList) {
+            telegramClient.sendMessage(new MessageSendDto(bot.getAdminGroupId(), number.getNumber()));
+        }
     }
+
+    private void createNumber(Command adminCommand) {
+        Numbers number = new Numbers();
+        if (Objects.equals(adminCommand.getArgs().get(0), "")) {
+            telegramClient.commandDone(bot.getAdminGroupId(), "Некоректный номер");
+            return;
+        }
+        number.setNumber(adminCommand.getArgs().get(0));
+        numberRepository.save(number);
+        telegramClient.commandDone(bot.getAdminGroupId(), "Номер сохранен");
+    }
+
+    private void deleteNumberAndUser(Command adminCommand) {
+        if (userRepository.findByNumber(adminCommand.getArgs().get(0)).isEmpty()) {
+            telegramClient.incorrectUserPhoneAdmin(bot.getAdminGroupId());
+        } else {
+            User user = userRepository.findByNumber(adminCommand.getArgs().get(0)).get();
+            documentRepository.deleteByUserId(user.getId());
+            userRepository.delete(user);
+            telegramClient.commandDone(bot.getAdminGroupId(), "Пользователь удалён");
+        }
+        if (numberRepository.findByNumber(adminCommand.getArgs().get(0)).isEmpty()) {
+            telegramClient.incorrectPhoneAdmin(bot.getAdminGroupId());
+        } else {
+            Numbers numbers = numberRepository.findByNumber(adminCommand.getArgs().get(0)).get();
+            numberRepository.delete(numbers);
+            telegramClient.commandDone(bot.getAdminGroupId(), "Телефон удалён");
+        }
+
+    }
+
 
     //*USER*
     private void processingFile(MessageDto message) {
         Long userId = message.getFrom().getId();
         boolean upload = userRepository.findByIdAndCommandAndState(
                 userId,
-                TypeCommands.UPLOAD.getTitle(),
+                TypeUserCommands.UPLOAD.getTitle(),
                 TypeStates.PROCESSING.getTitle()).isPresent();
         if (upload) {
             uploadFiles(message);
@@ -101,7 +159,7 @@ public class TelegramService {
         Long userId = message.getFrom().getId();
         boolean delete = userRepository.findByIdAndCommandAndState(
                 userId,
-                TypeCommands.DELETE.getTitle(),
+                TypeUserCommands.DELETE.getTitle(),
                 TypeStates.PROCESSING.getTitle()).isPresent();
         if (isUploadDone(message)) {
             return;
@@ -113,7 +171,8 @@ public class TelegramService {
             deleteFiles(message);
             return;
         }
-        switch (command.getCommand(message)) {
+        Command command = commandBuilder.parseToCommand(message);
+        switch (command.getTypeCommand()) {
             case VIEW:
                 viewFiles(message, true);
                 break;
@@ -154,7 +213,7 @@ public class TelegramService {
         viewFiles(message, false);
         User userDeleteProcessing = userRepository.findById(message.getFrom().getId())
                 .orElse(new User(message.getFrom().getId()));
-        userDeleteProcessing.setCommand(TypeCommands.DELETE.getTitle());
+        userDeleteProcessing.setCommand(TypeUserCommands.DELETE.getTitle());
         userDeleteProcessing.setState("processing");
         userRepository.save(userDeleteProcessing);
     }
@@ -164,7 +223,7 @@ public class TelegramService {
         String deleteDone = "Файлы удалены!";
         Optional<User> userDeleteProcessing = userRepository.
                 findByIdAndCommandAndState(userId,
-                        TypeCommands.DELETE.getTitle(),
+                        TypeUserCommands.DELETE.getTitle(),
                         TypeStates.PROCESSING.getTitle());
         if (userDeleteProcessing.isPresent() && documentRepository.findByUserIdAndFileName(
                 userId,
@@ -222,7 +281,7 @@ public class TelegramService {
         telegramClient.uploadCommand(message.getChat().getId());
         User userUploadProcessing = userRepository.findById(message.getFrom().getId())
                 .orElse(new User(message.getFrom().getId()));
-        userUploadProcessing.setCommand(TypeCommands.UPLOAD.getTitle());
+        userUploadProcessing.setCommand(TypeUserCommands.UPLOAD.getTitle());
         userUploadProcessing.setState(TypeStates.PROCESSING.getTitle());
         userRepository.save(userUploadProcessing);
     }
@@ -231,7 +290,7 @@ public class TelegramService {
         Long userId = message.getFrom().getId();
         String uploadDone = "Файлы загруженны!";
         Optional<User> processingUploadUser = userRepository.findByIdAndCommandAndState(userId,
-                TypeCommands.UPLOAD.getTitle(),
+                TypeUserCommands.UPLOAD.getTitle(),
                 TypeStates.PROCESSING.getTitle());
         if (processingUploadUser.isPresent() && !Objects.equals(message.getText(), "Готово")) {
             telegramClient.incorrectFile(message.getChat().getId());
@@ -258,7 +317,7 @@ public class TelegramService {
                 " @" + message.getFrom().getUsername();
         telegramClient.sharePhone(message.getChat().getId());
         User user = new User(userId, userName);
-        user.setCommand(TypeCommands.AUTH.getTitle());
+        user.setCommand(TypeUserCommands.AUTH.getTitle());
         user.setState(TypeStates.PROCESSING.getTitle());
         userRepository.save(user);
     }
@@ -289,7 +348,7 @@ public class TelegramService {
         Long userId = message.getFrom().getId();
         String messageText = message.getText();
         if (userRepository.findById(userId).isEmpty()) {
-            return Objects.equals(messageText, TypeCommands.START.getTitle());
+            return Objects.equals(messageText, TypeUserCommands.START.getTitle());
         }
         return true;
     }
